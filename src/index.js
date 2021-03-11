@@ -57,6 +57,7 @@ class Middleware {
       cleanFolder: true,
       pre: [],
       pos: [],
+      plugins: [],
     };
 
     const config = (service.custom && service.custom.middleware) || {};
@@ -71,6 +72,7 @@ class Middleware {
       cleanFolder: (typeof config.cleanFolder === 'boolean') ? config.cleanFolder : defaultOpts.cleanFolder,
       pre: Array.isArray(config.pre) ? config.pre : defaultOpts.pre,
       pos: Array.isArray(config.pos) ? config.pos : defaultOpts.pos,
+      plugins: Array.isArray(config.plugins) ? config.plugins : defaultOpts.plugins,
     };
   }
 
@@ -84,6 +86,37 @@ class Middleware {
    * */
   async processHandlers() {
     this.middlewareOpts = this.middlewareOpts || this.configPlugin(this.serverless.service);
+
+    //Load Plugins 
+    const isObject = (obj) => {
+      return (typeof obj === "object" && obj !== null) || typeof obj === "function";
+    }
+    // Load Global Plugins
+    if(this.middlewareOpts.plugins) {
+      this.middlewareOpts.plugins.map(e => {
+        let strKey = e;
+        let objVariables = null
+        if(isObject(e)) {
+          console.log(Object.keys(e));
+          strKey = Object.keys(e)[0];
+          objVariables = e[strKey];
+          console.log(objVariables);
+        }
+        const objPlugin = require(strKey);
+        const objSettings = objPlugin.init(objVariables);
+        console.log(objSettings);
+        //fs.copySync(objSettings.dir, `${this.middlewareOpts.folderName}/${objSettings.package}.${objSettings.extension}`);
+        fs.copyFile(objSettings.dir, `${this.middlewareOpts.folderName}/${objSettings.package}.${objSettings.extension}`, (err) => {
+          if (err) throw err;
+        });
+        if(objSettings.pre)
+          this.middlewareOpts.pre.push(`${this.middlewareOpts.folderName}/${objSettings.pre}`);
+        if(objSettings.pos)
+          this.middlewareOpts.pos.push(`${this.middlewareOpts.folderName}/${objSettings.pos}`);
+      })
+      console.log(this.middlewareOpts);
+    }
+
 
     const fnNames = this.options.function
       ? [this.options.function]
@@ -121,11 +154,14 @@ class Middleware {
       await fsAsync.writeFile(handlerPath, handler);
       // eslint-disable-next-line no-param-reassign
       fn.handler = `${this.middlewareOpts.folderName}/${fn.name}.handler`;
-
       // Added to support package includes (includes the mw modules)
       // Maybe still need to include any submodule that is needed
       if (fn.package && fn.package.include) {
+        // Add the new Handler
         fn.package.include.push(`${this.middlewareOpts.folderName}/${fn.name}.${extension}`);
+        // Add MW Modules
+        console.log(`${this.middlewareOpts.folderName}/${fn.name}.${extension}`);
+        console.log(handlers);
         handlers.map(e => {
           if(e.then)
             fn.package.include.push(`${e.then.module}.*`)
