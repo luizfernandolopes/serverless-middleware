@@ -121,6 +121,18 @@ class Middleware {
       await fsAsync.writeFile(handlerPath, handler);
       // eslint-disable-next-line no-param-reassign
       fn.handler = `${this.middlewareOpts.folderName}/${fn.name}.handler`;
+
+      // Added to support package includes (includes the mw modules)
+      // Maybe still need to include any submodule that is needed
+      if (fn.package && fn.package.include) {
+        fn.package.include.push(`${this.middlewareOpts.folderName}/${fn.name}.${extension}`);
+        handlers.map(e => {
+          if(e.then)
+            fn.package.include.push(`${e.then.module}.*`)
+          if(e.catch)
+            fn.package.include.push(`${e.catch.module}.*`)
+        });
+      } 
     }));
   }
 
